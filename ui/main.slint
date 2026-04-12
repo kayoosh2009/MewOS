@@ -1,70 +1,118 @@
-import { Button, VerticalBox, LineEdit, StandardListView } from "std-widgets.slint";
+import { Button, VerticalBox, LineEdit } from "std-widgets.slint";
 
 export component MainWindow inherits Window {
-    in-out property <string> current-time: "00:00:00";
-    in-out property <string> active-screen: "home";
+    in-out property <string> current-time: "12:00";
+    // Состояния: "lock", "home", "search", "files", "music", "phone"
+    in-out property <string> active-screen: "lock"; 
 
     width: 360px;
     height: 640px;
-    background: #000000;
+    background: black;
 
-    callback open-app(string);
+    // Фоновое изображение (на весь экран)
+    Image {
+        source: @image-url("img/background.png");
+        width: 100%;
+        height: 100%;
+        image-fit: cover;
+    }
 
-    VerticalBox {
-        padding: 10px;
-
-        // --- СТАТУС БАР ---
-        HorizontalLayout {
-            height: 30px;
-            Text { text: "MewOS"; color: #ff0055; font-weight: 800; }
-            Text { text: root.current-time; color: white; horizontal-alignment: right; }
-        }
-
-        // --- ГЛАВНЫЙ ЭКРАН ---
-        if (active-screen == "home") : VerticalBox {
+    // --- ЭКРАН БЛОКИРОВКИ ---
+    if (active-screen == "lock") : TouchArea {
+        clicked => { active-screen = "home"; }
+        VerticalBox {
             alignment: center;
-            spacing: 20px;
+            Text {
+                text: root.current-time;
+                font-size: 60px;
+                color: white;
+                font-weight: 700;
+            }
+            Text {
+                text: "Нажмите, чтобы разблокировать";
+                color: #ccc;
+                font-size: 14px;
+                horizontal-alignment: center;
+            }
+        }
+    }
 
-            GridLayout {
-                spacing: 20px;
-                Row {
-                    Rectangle {
-                        background: #1a1a1a; height: 80px; border-radius: 15px;
-                        Text { text: "🧮"; font-size: 30px; }
-                        TouchArea { clicked => { root.active-screen = "calculator"; } }
-                    }
-                    Rectangle {
-                        background: #1a1a1a; height: 80px; border-radius: 15px;
-                        Text { text: "🔍"; font-size: 30px; }
-                        TouchArea { clicked => { root.active-screen = "search"; } }
+    // --- ОСНОВНОЙ КОНТЕНТ (Главный экран и приложения) ---
+    if (active-screen != "lock") : VerticalBox {
+        padding: 0;
+        spacing: 0;
+
+        // Рабочая область
+        Rectangle {
+            VerticalBox {
+                padding: 20px;
+                if (active-screen == "home") : VerticalBox {
+                    alignment: start;
+                    Text {
+                        text: root.current-time;
+                        font-size: 40px;
+                        color: white;
+                        horizontal-alignment: center;
                     }
                 }
-                Row {
-                    Rectangle {
-                        background: #1a1a1a; height: 80px; border-radius: 15px;
-                        Text { text: "⚙️"; font-size: 30px; }
-                        TouchArea { clicked => { root.active-screen = "settings"; } }
-                    }
-                    Rectangle {
-                        background: #1a1a1a; height: 80px; border-radius: 15px;
-                        Text { text: "📷"; font-size: 30px; }
-                    }
+                if (active-screen == "search") : Text { text: "Поиск..."; color: white; }
+                if (active-screen == "files") : Text { text: "Файлы"; color: white; }
+                if (active-screen == "music") : Text { text: "Музыка"; color: white; }
+                if (active-screen == "phone") : Text { text: "Телефон"; color: white; }
+            }
+        }
+
+        // --- НИЖНИЙ ДОК (Иконки приложений) ---
+        if (active-screen == "home") : Rectangle {
+            height: 80px;
+            background: rgba(0, 0, 0, 0.5);
+            HorizontalLayout {
+                padding: 10px;
+                spacing: 15px;
+                alignment: center;
+                
+                // Поиск
+                Rectangle {
+                    width: 60px; height: 60px;
+                    Image { source: @image-url("img/icons/search.png"); width: 45px; }
+                    TouchArea { clicked => { active-screen = "search"; } }
+                }
+                // Файлы
+                Rectangle {
+                    width: 60px; height: 60px;
+                    Image { source: @image-url("img/icons/file.png"); width: 45px; }
+                    TouchArea { clicked => { active-screen = "files"; } }
+                }
+                // Музыка
+                Rectangle {
+                    width: 60px; height: 60px;
+                    Image { source: @image-url("img/icons/music.png"); width: 45px; }
+                    TouchArea { clicked => { active-screen = "music"; } }
+                }
+                // Телефон
+                Rectangle {
+                    width: 60px; height: 60px;
+                    Image { source: @image-url("img/icons/phone.png"); width: 45px; }
+                    TouchArea { clicked => { active-screen = "phone"; } }
                 }
             }
         }
 
-        // --- ЭКРАН КАЛЬКУЛЯТОРА ---
-        if (active-screen == "calculator") : VerticalBox {
-            Text { text: "Калькулятор"; color: white; horizontal-alignment: center; }
-            // Здесь будет логика кнопок
-            Button { text: "Назад"; clicked => { root.active-screen = "home"; } }
-        }
-
-        // --- ЭКРАН ПОИСКА ---
-        if (active-screen == "search") : VerticalBox {
-            LineEdit { placeholder-text: "Введите запрос..."; }
-            Button { text: "Найти в Kayoosh"; }
-            Button { text: "Назад"; clicked => { root.active-screen = "home"; } }
+        // --- ПАНЕЛЬ НАВИГАЦИИ (Назад, Домой, Окна) ---
+        Rectangle {
+            height: 50px;
+            background: black;
+            HorizontalLayout {
+                padding: 5px;
+                alignment: space-around;
+                
+                // Назад (просто возвращает домой в этой версии)
+                Text { text: "◁"; color: white; font-size: 24px; TouchArea { clicked => { active-screen = "home"; } } }
+                // Домой
+                Text { text: "○"; color: white; font-size: 24px; TouchArea { clicked => { active-screen = "home"; } } }
+                // Окна
+                Text { text: "☐"; color: white; font-size: 24px; }
+            }
         }
     }
 }
