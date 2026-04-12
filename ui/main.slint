@@ -1,0 +1,70 @@
+import { Button, VerticalBox, LineEdit, StandardListView } from "std-widgets.slint";
+
+export component MainWindow inherits Window {
+    in-out property <string> current-time: "00:00:00";
+    in-out property <string> active-screen: "home";
+
+    width: 360px;
+    height: 640px;
+    background: #000000;
+
+    callback open-app(string);
+
+    VerticalBox {
+        padding: 10px;
+
+        // --- СТАТУС БАР ---
+        HorizontalLayout {
+            height: 30px;
+            Text { text: "MewOS"; color: #ff0055; font-weight: 800; }
+            Text { text: root.current-time; color: white; horizontal-alignment: right; }
+        }
+
+        // --- ГЛАВНЫЙ ЭКРАН ---
+        if (active-screen == "home") : VerticalBox {
+            alignment: center;
+            spacing: 20px;
+
+            GridLayout {
+                spacing: 20px;
+                Row {
+                    Rectangle {
+                        background: #1a1a1a; height: 80px; border-radius: 15px;
+                        Text { text: "🧮"; font-size: 30px; }
+                        TouchArea { clicked => { root.active-screen = "calculator"; } }
+                    }
+                    Rectangle {
+                        background: #1a1a1a; height: 80px; border-radius: 15px;
+                        Text { text: "🔍"; font-size: 30px; }
+                        TouchArea { clicked => { root.active-screen = "search"; } }
+                    }
+                }
+                Row {
+                    Rectangle {
+                        background: #1a1a1a; height: 80px; border-radius: 15px;
+                        Text { text: "⚙️"; font-size: 30px; }
+                        TouchArea { clicked => { root.active-screen = "settings"; } }
+                    }
+                    Rectangle {
+                        background: #1a1a1a; height: 80px; border-radius: 15px;
+                        Text { text: "📷"; font-size: 30px; }
+                    }
+                }
+            }
+        }
+
+        // --- ЭКРАН КАЛЬКУЛЯТОРА ---
+        if (active-screen == "calculator") : VerticalBox {
+            Text { text: "Калькулятор"; color: white; horizontal-alignment: center; }
+            // Здесь будет логика кнопок
+            Button { text: "Назад"; clicked => { root.active-screen = "home"; } }
+        }
+
+        // --- ЭКРАН ПОИСКА ---
+        if (active-screen == "search") : VerticalBox {
+            LineEdit { placeholder-text: "Введите запрос..."; }
+            Button { text: "Найти в Kayoosh"; }
+            Button { text: "Назад"; clicked => { root.active-screen = "home"; } }
+        }
+    }
+}
