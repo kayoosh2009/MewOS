@@ -25,6 +25,7 @@ esp-idf-svc = { version = "0.49", features = ["alloc"] }
 
 [target.'cfg(not(target_os = "espidf"))'.dependencies]
 env_logger = "0.11"
+webbrowser = "1.0"
 
 [build-dependencies]
 slint-build = "1.5"
