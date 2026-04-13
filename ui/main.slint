@@ -1,222 +1,734 @@
-import { Button, VerticalBox, LineEdit } from "std-widgets.slint";
+import { VerticalBox, HorizontalBox } from "std-widgets.slint";
 
-export component MainWindow inherits Window {
-    // Данные системы
-    in-out property <string> current-time: "12:00";
-    // Состояния: "lock", "home", "search", "files", "music", "phone"
-    in-out property <string> active-screen: "lock"; 
-    in-out property <string> calc-display: "0";
+// ─────────────────────────────────────────────────────────
+//  Status Bar
+// ─────────────────────────────────────────────────────────
+component StatusBar {
+    in property <string> time: "12:00";
+    in property <int>    battery: 100;
 
+    height: 36px;
 
-component CalcButton {
-    in property <string> text;
-    in property <color> bg-color: #333;
-    callback clicked;
     Rectangle {
-        background: touch.pressed ? #555 : bg-color;
-        border-radius: 10px;
-        Text { text: root.text; font-size: 24px; color: white; }
-        touch := TouchArea { clicked => { root.clicked(); } }
+        width: 100%; height: 100%;
+        background: rgba(0, 0, 0, 0.55);
+
+        HorizontalBox {
+            padding-left: 16px;
+            padding-right: 16px;
+            alignment: space-between;
+
+            Text {
+                text: root.time;
+                font-size: 13px;
+                color: white;
+                vertical-alignment: center;
+                font-weight: 600;
+            }
+
+            HorizontalBox {
+                spacing: 6px;
+                alignment: center;
+
+                Text {
+                    text: root.battery + "%";
+                    font-size: 12px;
+                    color: root.battery > 20 ? white : #ff4444;
+                    vertical-alignment: center;
+                }
+
+                // Battery outline
+                Rectangle {
+                    width: 28px; height: 14px;
+                    border-radius: 3px;
+                    border-width: 1.5px;
+                    border-color: rgba(255,255,255,0.6);
+                    background: transparent;
+
+                    // Fill bar
+                    Rectangle {
+                        x: 2px; y: 2px;
+                        width: (24px * root.battery / 100);
+                        height: 10px;
+                        border-radius: 2px;
+                        background: root.battery > 20 ? #4cff72 : #ff4444;
+                    }
+
+                    // Nub
+                    Rectangle {
+                        x: 30px; y: 4px;
+                        width: 3px; height: 6px;
+                        border-radius: 1px;
+                        background: rgba(255,255,255,0.5);
+                    }
+                }
+            }
+        }
     }
 }
 
-    // Параметры окна
-    width: 360px;
-    height: 640px;
-    background: black;
+// ─────────────────────────────────────────────────────────
+//  Nav Bar (Back / Home / Recents)
+// ─────────────────────────────────────────────────────────
+component NavBar {
+    height: 60px; // Немного увеличим высоту для удобства нажатия
+    callback back;
+    callback home;
 
-    // Обработчики для Rust
-    callback search-pressed(string);
-    callback calc-button-pressed(string);
+    Rectangle {
+        width: 100%; height: 100%;
+        background: #1a1a1a; // Сделаем фон непрозрачным для проверки
 
-    // 1. ФОНОВЫЕ ОБОИ (на все экраны)
-    Image {
-        source: @image-url("img/background.png");
-        width: 100%;
-        height: 100%;
-        image-fit: cover;
+        HorizontalBox {
+            alignment: space-around;
+            padding: 8px;
+
+            Rectangle {
+                width: 36px; height: 36px; border-radius: 18px;
+                background: bt.pressed ? rgba(255,255,255,0.15) : rgba(255,255,255,0.07);
+                Text { text: "◁"; font-size: 17px; color: white; horizontal-alignment: center; vertical-alignment: center; }
+                bt := TouchArea { clicked => { root.back(); } }
+            }
+            Rectangle {
+                width: 36px; height: 36px; border-radius: 18px;
+                background: ht.pressed ? rgba(255,255,255,0.15) : rgba(255,255,255,0.07);
+                Text { text: "○"; font-size: 20px; color: white; horizontal-alignment: center; vertical-alignment: center; }
+                ht := TouchArea { clicked => { root.home(); } }
+            }
+            Rectangle {
+                width: 36px; height: 36px; border-radius: 18px;
+                background: rgba(255,255,255,0.07);
+                Text { text: "▣"; font-size: 14px; color: rgba(255,255,255,0.35); horizontal-alignment: center; vertical-alignment: center; }
+            }
+        }
     }
+}
 
-    // --- ЭКРАН БЛОКИРОВКИ ---
-    if (active-screen == "lock") : TouchArea {
-        clicked => { active-screen = "home"; }
+// ─────────────────────────────────────────────────────────
+//  Dial Button
+// ─────────────────────────────────────────────────────────
+component DialButton {
+    in property <string> label;
+    in property <string> sub-label: "";
+    callback clicked;
+
+    width: 72px; height: 72px;
+
+    Rectangle {
+        width: 100%; height: 100%;
+        border-radius: 36px;
+        background: t.pressed ? rgba(255,255,255,0.18) : rgba(255,255,255,0.09);
+
         VerticalBox {
             alignment: center;
-            Text {
-                text: root.current-time;
-                font-size: 60px;
-                color: white;
-                font-weight: 700;
+            spacing: 0px;
+            Text { text: root.label; font-size: 26px; color: white; horizontal-alignment: center; }
+            Text { text: root.sub-label; font-size: 9px; color: rgba(255,255,255,0.35); horizontal-alignment: center; }
+        }
+
+        t := TouchArea { clicked => { root.clicked(); } }
+    }
+}
+
+// ─────────────────────────────────────────────────────────
+//  Track Item
+// ─────────────────────────────────────────────────────────
+component TrackItem {
+    in property <string> title;
+    in property <string> duration;
+    in property <bool>   is-playing;
+    callback play-clicked;
+    callback delete-clicked;
+
+    height: 58px;
+
+    Rectangle {
+        width: 100%; height: 100%;
+        border-radius: 12px;
+        background: root.is-playing ? rgba(255,255,255,0.12) : rgba(255,255,255,0.05);
+
+        HorizontalBox {
+            padding: 12px; spacing: 12px; alignment: stretch;
+
+            Rectangle {
+                width: 34px; height: 34px; border-radius: 17px;
+                background: root.is-playing ? #1db954 : rgba(255,255,255,0.1);
+                Text {
+                    text: root.is-playing ? "▶" : "▷";
+                    font-size: 14px; color: white;
+                    horizontal-alignment: center; vertical-alignment: center;
+                }
+                TouchArea { clicked => { root.play-clicked(); } }
             }
+
             Text {
-                text: "Нажмите, чтобы разблокировать";
-                color: #ccc;
-                font-size: 14px;
-                horizontal-alignment: center;
+                text: root.title;
+                font-size: 14px; color: white;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+
+            Text {
+                text: root.duration;
+                font-size: 12px; color: rgba(255,255,255,0.4);
+                vertical-alignment: center;
+            }
+
+            Rectangle {
+                width: 28px; height: 28px; border-radius: 14px;
+                background: dt.pressed ? rgba(255,60,60,0.45) : rgba(255,60,60,0.13);
+                Text { text: "✕"; font-size: 13px; color: #ff6b6b; horizontal-alignment: center; vertical-alignment: center; }
+                dt := TouchArea { clicked => { root.delete-clicked(); } }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────
+//  Main Window
+// ─────────────────────────────────────────────────────────
+export component MainWindow inherits Window {
+
+    in-out property <string> current-time: "12:00";
+    in-out property <int>    battery-level: 87;
+    // "lock" | "home" | "phone" | "camera" | "gallery" | "music"
+    in-out property <string> active-screen: "lock";
+
+    // Dock slots — values: 0=phone 1=camera 2=gallery 3=music
+    in-out property <int> slot0: 0;
+    in-out property <int> slot1: 1;
+    in-out property <int> slot2: 2;
+    in-out property <int> slot3: 3;
+
+    // Phone
+    in-out property <string> dial-number: "";
+
+    // Music
+    in-out property <int>    playing-track: -1;
+    in-out property <string> track1-title: "Kayoosh — Dawn";
+    in-out property <string> track2-title: "Mew — Pixel Sky";
+    in-out property <string> track3-title: "Studio — Midnight";
+    in-out property <bool>   track1-deleted: false;
+    in-out property <bool>   track2-deleted: false;
+    in-out property <bool>   track3-deleted: false;
+
+    // Callbacks → Rust
+    callback call-pressed(string);
+    callback hangup-pressed();
+    callback camera-capture();
+    callback gallery-open(int);
+    callback track-play(int);
+    callback track-delete(int);
+    callback dock-swap(int, int);   // swap two slot indices
+
+    width: 360px;
+    height: 640px;
+    background: #000;
+
+    // Map slot value → screen name
+    pure function slot-screen(v: int) -> string {
+        if (v == 0) { return "phone"; }
+        if (v == 1) { return "camera"; }
+        if (v == 2) { return "gallery"; }
+        return "music";
+    }
+
+    // Map slot value → icon image
+    pure function slot-icon(v: int) -> image {
+        if (v == 0) { return @image-url("img/icons/phone.png"); }
+        if (v == 1) { return @image-url("img/icons/camera.png"); }
+        if (v == 2) { return @image-url("img/icons/fotos.png"); }
+        return @image-url("img/icons/music.png");
+    }
+
+    // ── LOCK SCREEN ──────────────────────────────────────
+    if (active-screen == "lock") : Rectangle {
+        width: 100%; height: 100%;
+
+        Image {
+            source: @image-url("img/background.png");
+            width: 100%; height: 100%;
+            image-fit: cover;
+        }
+        Rectangle { width: 100%; height: 100%; background: rgba(0,0,0,0.42); }
+
+        // Battery hint top-right
+        Text {
+            x: root.width - 60px;
+            y: 18px;
+            text: root.battery-level + "%";
+            font-size: 13px;
+            color: rgba(255,255,255,0.55);
+        }
+
+        TouchArea {
+            clicked => { active-screen = "home"; }
+            VerticalBox {
+                alignment: center;
+                spacing: 8px;
+                padding: 40px;
+
+                Text {
+                    text: root.current-time;
+                    font-size: 78px;
+                    color: white;
+                    font-weight: 200;
+                    horizontal-alignment: center;
+                }
+                Text {
+                    text: "MewOS";
+                    font-size: 15px;
+                    color: rgba(255,255,255,0.45);
+                    horizontal-alignment: center;
+                    font-weight: 300;
+                }
+                Text {
+                    text: "tap to unlock";
+                    font-size: 12px;
+                    color: rgba(255,255,255,0.28);
+                    horizontal-alignment: center;
+                }
             }
         }
     }
 
-    // --- ОСНОВНАЯ ОБОЛОЧКА СИСТЕМЫ (после разблокировки) ---
-    if (active-screen != "lock") : VerticalBox {
-        padding: 0;
-        spacing: 0;
+    // ── HOME SCREEN ──────────────────────────────────────
+    if (active-screen == "home") : Rectangle {
+        width: 100%; height: 100%;
 
-        // ВЕРХНЯЯ ЧАСТЬ: Контент приложений
-        Rectangle {
-            vertical-stretch: 1; // Занимает всё свободное место до дока/панели
-            
-            // Рабочий стол
-            if (active-screen == "home") : VerticalBox {
-                padding: 20px;
-                alignment: start;
-                Text {
-                    text: root.current-time;
-                    font-size: 45px;
-                    color: white;
-                    horizontal-alignment: center;
-                    font-weight: 500;
-                }
-            }
+        Image {
+            source: @image-url("img/background.png");
+            width: 100%; height: 100%;
+            image-fit: cover;
+        }
+        Rectangle { width: 100%; height: 100%; background: rgba(0,0,0,0.28); }
 
-            // Поисковик
-            if (active-screen == "search") : VerticalBox {
-                padding: 30px;
-                spacing: 20px;
-                alignment: start;
-                Text {
-                    text: "Mew Search";
-                    font-size: 28px;
-                    color: #ff0055;
-                    horizontal-alignment: center;
-                    font-weight: 800;
-                }
-                search_input := LineEdit {
-                    placeholder-text: "Поиск в Kayoosh...";
-                    height: 45px;
-                }
-                Button {
-                    text: "Найти";
-                    primary: true;
-                    height: 40px;
-                    clicked => { root.search-pressed(search_input.text); }
-                }
-            }
+        VerticalBox {
+            padding: 0px; spacing: 0px;
 
-            // Заглушки для остальных приложений
-            if (active-screen == "calculator") : VerticalBox {
-                padding: 20px;
-                spacing: 15px;
-                
-                // Дисплей
-                Rectangle {
-                    height: 80px;
-                    background: #1a1a1a;
-                    border-radius: 10px;
+            StatusBar { time: root.current-time; battery: root.battery-level; }
+
+            // Clock centre
+            Rectangle {
+                vertical-stretch: 1;
+                VerticalBox {
+                    alignment: center;
+                    spacing: 4px;
                     Text {
-                        text: root.calc-display;
-                        font-size: 32px;
+                        text: root.current-time;
+                        font-size: 56px;
                         color: white;
-                        horizontal-alignment: right;
-                        vertical-alignment: center;
-                        padding-right: 15px;
+                        font-weight: 200;
+                        horizontal-alignment: center;
+                    }
+                    Text {
+                        text: "MewOS";
+                        font-size: 13px;
+                        color: rgba(255,255,255,0.38);
+                        horizontal-alignment: center;
                     }
                 }
+            }
 
-                // Сетка кнопок
-                GridLayout {
+            // ── DOCK ─────────────────────────────────────
+            Rectangle {
+                height: 90px;
+                background: rgba(0,0,0,0.58);
+
+                HorizontalBox {
+                    alignment: space-around;
+                    padding-left: 16px;
+                    padding-right: 16px;
+                    padding-top: 12px;
+                    padding-bottom: 12px;
                     spacing: 10px;
-                    Row {
-                        CalcButton { text: "C"; bg-color: #555; clicked => { root.calc-button-pressed("C") } }
-                        CalcButton { text: "÷"; bg-color: #f39c12; clicked => { root.calc-button-pressed("/") } }
-                    }
-                    Row {
-                        CalcButton { text: "7"; clicked => { root.calc-button-pressed("7") } }
-                        CalcButton { text: "8"; clicked => { root.calc-button-pressed("8") } }
-                        CalcButton { text: "9"; clicked => { root.calc-button-pressed("9") } }
-                        CalcButton { text: "×"; bg-color: #f39c12; clicked => { root.calc-button-pressed("*") } }
-                    }
-                    Row {
-                        CalcButton { text: "4"; clicked => { root.calc-button-pressed("4") } }
-                        CalcButton { text: "5"; clicked => { root.calc-button-pressed("5") } }
-                        CalcButton { text: "6"; clicked => { root.calc-button-pressed("6") } }
-                        CalcButton { text: "−"; bg-color: #f39c12; clicked => { root.calc-button-pressed("-") } }
-                    }
-                    Row {
-                        CalcButton { text: "1"; clicked => { root.calc-button-pressed("1") } }
-                        CalcButton { text: "2"; clicked => { root.calc-button-pressed("2") } }
-                        CalcButton { text: "3"; clicked => { root.calc-button-pressed("3") } }
-                        CalcButton { text: "+"; bg-color: #f39c12; clicked => { root.calc-button-pressed("+") } }
-                    }
-                    Row {
-                        CalcButton { text: "0"; colspan: 2; clicked => { root.calc-button-pressed("0") } }
-                        CalcButton { text: "="; bg-color: #f39c12; clicked => { root.calc-button-pressed("=") } }
-                    }
-                }
-            }
-            if (active-screen == "music") : VerticalBox { alignment: center; Text { text: "Музыкальный плеер"; color: white; font-size: 20px; } }
-            if (active-screen == "phone") : VerticalBox { alignment: center; Text { text: "Телефон"; color: white; font-size: 20px; } }
-        }
 
-        // НИЖНИЙ ДОК (Иконки быстрого доступа) - виден только на Home
-        if (active-screen == "home") : Rectangle {
-            height: 90px;
-            background: rgba(0, 0, 0, 0.4);
-            HorizontalLayout {
-                padding: 10px;
-                spacing: 15px;
-                alignment: center;
-                
-                // Иконка Поиска
-                Rectangle {
-                    width: 65px; height: 65px;
-                    Image { source: @image-url("img/icons/search.png"); width: 50px; }
-                    TouchArea { clicked => { active-screen = "search"; } }
+                    // Slot 0
+                    Rectangle {
+                        width: 62px; height: 62px; border-radius: 16px;
+                        background: d0.pressed ? rgba(255,255,255,0.22) : rgba(255,255,255,0.11);
+                        Image {
+                            source: root.slot-icon(root.slot0);
+                            width: 36px; height: 36px;
+                            x: 13px; y: 13px;
+                            image-fit: contain;
+                        }
+                        d0 := TouchArea {
+                            clicked => { root.active-screen = root.slot-screen(root.slot0); }
+                            pointer-event(e) => {
+                                if (e.kind == PointerEventKind.up && e.button == PointerEventButton.right) {
+                                    // Мы просто уведомляем Rust, что нужно поменять слоты 0 и 1
+                                    root.dock-swap(0, 1); 
+                                }
+                            }
+                        }
+                    }
+
+                    // Slot 1
+                    Rectangle {
+                        width: 62px; height: 62px; border-radius: 16px;
+                        background: d1.pressed ? rgba(255,255,255,0.22) : rgba(255,255,255,0.11);
+                        Image {
+                            source: root.slot-icon(root.slot1);
+                            width: 36px; height: 36px;
+                            x: 13px; y: 13px;
+                            image-fit: contain;
+                        }
+                        
+                        d1 := TouchArea {
+                            clicked => { 
+                                root.active-screen = root.slot-screen(root.slot1); 
+                            }
+                            pointer-event(e) => {
+                                if (e.kind == PointerEventKind.up && e.button == PointerEventButton.right) {
+                                    root.dock-swap(1, 2); 
+                                }
+                            }
+                        }
+                    }
+
+                    // Slot 2
+                    Rectangle {
+                        width: 62px; height: 62px; border-radius: 16px;
+                        background: d2.pressed ? rgba(255,255,255,0.22) : rgba(255,255,255,0.11);
+                        Image {
+                            source: root.slot-icon(root.slot2);
+                            width: 36px; height: 36px;
+                            x: 13px; y: 13px;
+                            image-fit: contain;
+                        }
+                        d2 := TouchArea {
+                            clicked => { 
+                                root.active-screen = root.slot-screen(root.slot2); 
+                            }
+                            pointer-event(e) => {
+                                if (e.kind == PointerEventKind.up && e.button == PointerEventButton.right) {
+                                    // Передаем управление в Rust для замены слотов 2 и 3
+                                    root.dock-swap(2, 3); 
+                                }
+                            }
+                        }
+                    }
+
+                    // Slot 3
+                    Rectangle {
+                        width: 62px; height: 62px; border-radius: 16px;
+                        background: d3.pressed ? rgba(255,255,255,0.22) : rgba(255,255,255,0.11);
+                        Image {
+                            source: root.slot-icon(root.slot3);
+                            width: 36px; height: 36px;
+                            x: 13px; y: 13px;
+                            image-fit: contain;
+                        }
+                        d3 := TouchArea {
+                            clicked => { root.active-screen = root.slot-screen(root.slot3); }
+                        }
+                    }
                 }
-                // Иконка Файлов
-                Rectangle {
-                    width: 65px; height: 65px;
-                    Image { source: @image-url("img/icons/file.png"); width: 50px; }
-                    TouchArea { clicked => { active-screen = "files"; } }
-                }
-                // Иконка Музыки
-                Rectangle {
-                    width: 65px; height: 65px;
-                    Image { source: @image-url("img/icons/music.png"); width: 50px; }
-                    TouchArea { clicked => { active-screen = "music"; } }
-                }
-                // Иконка Телефона
-                Rectangle {
-                    width: 65px; height: 65px;
-                    Image { source: @image-url("img/icons/phone.png"); width: 50px; }
-                    TouchArea { clicked => { active-screen = "phone"; } }
-                }
+            }
+
+            NavBar {
+                back => { root.active-screen = "home"; }
+                home => { root.active-screen = "home"; }
             }
         }
+    }
 
-        // СИСТЕМНАЯ ПАНЕЛЬ НАВИГАЦИИ (Назад, Домой, Окна)
-        Rectangle {
-            height: 50px;
-            background: #000;
-            HorizontalLayout {
-                padding: 5px;
-                alignment: space-around;
-                
-                // Кнопка "Назад"
-                Text { 
-                    text: "◁"; color: white; font-size: 24px; 
-                    TouchArea { clicked => { active-screen = "home"; } } 
-                }
-                // Кнопка "Домой"
-                Text { 
-                    text: "○"; color: white; font-size: 24px; 
-                    TouchArea { clicked => { active-screen = "home"; } } 
-                }
-                // Кнопка "Окна"
-                Text { 
-                    text: "☐"; color: white; font-size: 24px; 
+    // ── PHONE ────────────────────────────────────────────
+    if (active-screen == "phone") : Rectangle {
+        width: 100%; height: 100%;
+        background: #0c0c14;
+
+        VerticalBox {
+            padding: 0px; spacing: 0px;
+
+            StatusBar { time: root.current-time; battery: root.battery-level; }
+
+            Rectangle {
+                height: 52px;
+                background: rgba(0,0,0,0.4);
+                HorizontalBox {
+                    padding: 14px; alignment: space-between;
+                    Image { source: @image-url("img/icons/phone.png"); width: 22px; height: 22px; image-fit: contain; vertical-alignment: center; }
+                    Text { text: "Phone"; font-size: 18px; color: white; vertical-alignment: center; font-weight: 500; }
+                    Rectangle { width: 22px; }
                 }
             }
+
+            Rectangle {
+                height: 110px;
+                background: rgba(255,255,255,0.03);
+                VerticalBox {
+                    alignment: center;
+                    padding: 16px;
+                    Text {
+                        text: root.dial-number == "" ? "Enter number" : root.dial-number;
+                        font-size: root.dial-number == "" ? 16px : 32px;
+                        color: root.dial-number == "" ? rgba(255,255,255,0.25) : white;
+                        horizontal-alignment: center;
+                        font-weight: 300;
+                    }
+                }
+            }
+
+            Rectangle {
+                vertical-stretch: 1;
+                VerticalBox {
+                    padding: 14px; spacing: 10px; alignment: center;
+
+                    HorizontalBox { alignment: center; spacing: 16px;
+                        DialButton { label: "1"; clicked => { root.dial-number += "1"; } }
+                        DialButton { label: "2"; sub-label: "ABC"; clicked => { root.dial-number += "2"; } }
+                        DialButton { label: "3"; sub-label: "DEF"; clicked => { root.dial-number += "3"; } }
+                    }
+                    HorizontalBox { alignment: center; spacing: 16px;
+                        DialButton { label: "4"; sub-label: "GHI"; clicked => { root.dial-number += "4"; } }
+                        DialButton { label: "5"; sub-label: "JKL"; clicked => { root.dial-number += "5"; } }
+                        DialButton { label: "6"; sub-label: "MNO"; clicked => { root.dial-number += "6"; } }
+                    }
+                    HorizontalBox { alignment: center; spacing: 16px;
+                        DialButton { label: "7"; sub-label: "PQRS"; clicked => { root.dial-number += "7"; } }
+                        DialButton { label: "8"; sub-label: "TUV"; clicked => { root.dial-number += "8"; } }
+                        DialButton { label: "9"; sub-label: "WXYZ"; clicked => { root.dial-number += "9"; } }
+                    }
+                    HorizontalBox { alignment: center; spacing: 16px;
+                        DialButton { label: "*"; clicked => { root.dial-number += "*"; } }
+                        DialButton { label: "0"; sub-label: "+"; clicked => { root.dial-number += "0"; } }
+                        DialButton { label: "⌫"; clicked => { root.call-pressed("backspace"); } }
+                    }
+
+                    HorizontalBox {
+                        alignment: center;
+                        Rectangle {
+                            width: 72px; height: 72px; border-radius: 36px;
+                            background: ct.pressed ? #1a9e3f : #25d45a;
+                            Image { source: @image-url("img/icons/phone.png"); width: 30px; height: 30px; x: 21px; y: 21px; image-fit: contain; }
+                            ct := TouchArea { clicked => { root.call-pressed(root.dial-number); } }
+                        }
+                    }
+                }
+            }
+
+            NavBar { back => { root.active-screen = "home"; } home => { root.active-screen = "home"; } }
+        }
+    }
+
+    // ── CAMERA ───────────────────────────────────────────
+    if (active-screen == "camera") : Rectangle {
+        width: 100%; height: 100%;
+        background: #000;
+
+        VerticalBox {
+            padding: 0px; spacing: 0px;
+
+            StatusBar { time: root.current-time; battery: root.battery-level; }
+
+            Rectangle {
+                height: 52px;
+                background: rgba(0,0,0,0.7);
+                HorizontalBox {
+                    padding: 14px; alignment: space-between;
+                    Image { source: @image-url("img/icons/camera.png"); width: 22px; height: 22px; image-fit: contain; vertical-alignment: center; }
+                    Text { text: "Camera"; font-size: 18px; color: white; vertical-alignment: center; font-weight: 500; }
+                    Rectangle { width: 22px; }
+                }
+            }
+
+            Rectangle {
+                vertical-stretch: 1;
+                background: #0a0a0a;
+                VerticalBox {
+                    alignment: center; spacing: 14px;
+                    Image { source: @image-url("img/icons/camera.png"); width: 52px; height: 52px; image-fit: contain; horizontal-alignment: center; opacity: 0.12; }
+                    Text { text: "Viewfinder"; font-size: 15px; color: rgba(255,255,255,0.15); horizontal-alignment: center; }
+                    Text { text: "Connect camera module"; font-size: 11px; color: rgba(255,255,255,0.09); horizontal-alignment: center; }
+                }
+            }
+
+            Rectangle {
+                height: 96px;
+                background: rgba(0,0,0,0.85);
+                HorizontalBox {
+                    alignment: center; padding: 13px;
+                    Rectangle {
+                        width: 70px; height: 70px; border-radius: 35px;
+                        background: rgba(255,255,255,0.92);
+                        Rectangle {
+                            x: 7px; y: 7px; width: 56px; height: 56px; border-radius: 28px;
+                            background: st.pressed ? rgba(0,0,0,0.1) : transparent;
+                            border-width: 2px; border-color: rgba(0,0,0,0.15);
+                        }
+                        st := TouchArea { clicked => { root.camera-capture(); } }
+                    }
+                }
+            }
+
+            NavBar { back => { root.active-screen = "home"; } home => { root.active-screen = "home"; } }
+        }
+    }
+
+    // ── GALLERY ──────────────────────────────────────────
+    if (active-screen == "gallery") : Rectangle {
+        width: 100%; height: 100%;
+        background: #0c0c14;
+
+        VerticalBox {
+            padding: 0px; spacing: 0px;
+
+            StatusBar { time: root.current-time; battery: root.battery-level; }
+
+            Rectangle {
+                height: 52px;
+                background: rgba(0,0,0,0.4);
+                HorizontalBox {
+                    padding: 14px; alignment: space-between;
+                    Image { source: @image-url("img/icons/fotos.png"); width: 22px; height: 22px; image-fit: contain; vertical-alignment: center; }
+                    Text { text: "Gallery"; font-size: 18px; color: white; vertical-alignment: center; font-weight: 500; }
+                    Rectangle { width: 22px; }
+                }
+            }
+
+            Rectangle {
+                vertical-stretch: 1;
+                VerticalBox {
+                    padding: 12px; spacing: 10px; alignment: start;
+
+                    Text { text: "All photos"; font-size: 12px; color: rgba(255,255,255,0.32); font-weight: 500; }
+
+                    HorizontalBox {
+                        spacing: 6px;
+                        Rectangle { height: 108px; border-radius: 10px; horizontal-stretch: 1; background: #1a1a28;
+                            Image { source: @image-url("img/icons/fotos.png"); width: 34px; height: 34px; x: (parent.width - 34px)/2; y: 37px; image-fit: contain; opacity: 0.2; }
+                            TouchArea { clicked => { root.gallery-open(0); } }
+                        }
+                        Rectangle { height: 108px; border-radius: 10px; horizontal-stretch: 1; background: #16162a;
+                            Image { source: @image-url("img/icons/fotos.png"); width: 34px; height: 34px; x: (parent.width - 34px)/2; y: 37px; image-fit: contain; opacity: 0.2; }
+                            TouchArea { clicked => { root.gallery-open(1); } }
+                        }
+                        Rectangle { height: 108px; border-radius: 10px; horizontal-stretch: 1; background: #1e1e30;
+                            Image { source: @image-url("img/icons/fotos.png"); width: 34px; height: 34px; x: (parent.width - 34px)/2; y: 37px; image-fit: contain; opacity: 0.2; }
+                            TouchArea { clicked => { root.gallery-open(2); } }
+                        }
+                    }
+
+                    HorizontalBox {
+                        spacing: 6px;
+                        Rectangle { height: 108px; border-radius: 10px; horizontal-stretch: 1; background: #16162a;
+                            Image { source: @image-url("img/icons/fotos.png"); width: 34px; height: 34px; x: (parent.width - 34px)/2; y: 37px; image-fit: contain; opacity: 0.2; }
+                            TouchArea { clicked => { root.gallery-open(3); } }
+                        }
+                        Rectangle { height: 108px; border-radius: 10px; horizontal-stretch: 1; background: #1e1e30;
+                            Image { source: @image-url("img/icons/fotos.png"); width: 34px; height: 34px; x: (parent.width - 34px)/2; y: 37px; image-fit: contain; opacity: 0.2; }
+                            TouchArea { clicked => { root.gallery-open(4); } }
+                        }
+                        Rectangle { height: 108px; border-radius: 10px; horizontal-stretch: 1; background: #1a1a28;
+                            Image { source: @image-url("img/icons/fotos.png"); width: 34px; height: 34px; x: (parent.width - 34px)/2; y: 37px; image-fit: contain; opacity: 0.2; }
+                            TouchArea { clicked => { root.gallery-open(5); } }
+                        }
+                    }
+
+                    Text {
+                        text: "Photos appear here after shooting";
+                        font-size: 11px;
+                        color: rgba(255,255,255,0.16);
+                        horizontal-alignment: center;
+                    }
+                }
+            }
+
+            NavBar { back => { root.active-screen = "home"; } home => { root.active-screen = "home"; } }
+        }
+    }
+
+    // ── MUSIC ────────────────────────────────────────────
+    if (active-screen == "music") : Rectangle {
+        width: 100%; height: 100%;
+        background: #0c0c14;
+
+        VerticalBox {
+            padding: 0px; spacing: 0px;
+
+            StatusBar { time: root.current-time; battery: root.battery-level; }
+
+            Rectangle {
+                height: 52px;
+                background: rgba(0,0,0,0.4);
+                HorizontalBox {
+                    padding: 14px; alignment: space-between;
+                    Image { source: @image-url("img/icons/music.png"); width: 22px; height: 22px; image-fit: contain; vertical-alignment: center; }
+                    Text { text: "Music"; font-size: 18px; color: white; vertical-alignment: center; font-weight: 500; }
+                    Rectangle { width: 22px; }
+                }
+            }
+
+            // Now playing
+            Rectangle {
+                height: 165px;
+                background: rgba(29, 185, 84, 0.07);
+                VerticalBox {
+                    alignment: center; spacing: 10px; padding: 20px;
+                    Image {
+                        source: @image-url("img/icons/music.png");
+                        width: 50px; height: 50px;
+                        image-fit: contain;
+                        horizontal-alignment: center;
+                        opacity: root.playing-track >= 0 ? 1.0 : 0.18;
+                    }
+                    Text {
+                        text: root.playing-track == 0 ? root.track1-title :
+                              root.playing-track == 1 ? root.track2-title :
+                              root.playing-track == 2 ? root.track3-title :
+                              "Nothing playing";
+                        font-size: 14px;
+                        color: root.playing-track >= 0 ? white : rgba(255,255,255,0.28);
+                        horizontal-alignment: center;
+                        font-weight: 500;
+                    }
+                }
+            }
+
+            // Track list
+            Rectangle {
+                vertical-stretch: 1;
+                VerticalBox {
+                    padding: 14px; spacing: 8px; alignment: start;
+
+                    Text { text: "Tracks"; font-size: 12px; color: rgba(255,255,255,0.32); font-weight: 500; }
+
+                    if (!root.track1-deleted) : TrackItem {
+                        title: root.track1-title; duration: "3:24";
+                        is-playing: root.playing-track == 0;
+                        play-clicked => { root.track-play(0); root.playing-track = 0; }
+                        delete-clicked => {
+                            root.track-delete(0);
+                            root.track1-deleted = true;
+                            if (root.playing-track == 0) { root.playing-track = -1; }
+                        }
+                    }
+                    if (!root.track2-deleted) : TrackItem {
+                        title: root.track2-title; duration: "4:01";
+                        is-playing: root.playing-track == 1;
+                        play-clicked => { root.track-play(1); root.playing-track = 1; }
+                        delete-clicked => {
+                            root.track-delete(1);
+                            root.track2-deleted = true;
+                            if (root.playing-track == 1) { root.playing-track = -1; }
+                        }
+                    }
+                    if (!root.track3-deleted) : TrackItem {
+                        title: root.track3-title; duration: "2:58";
+                        is-playing: root.playing-track == 2;
+                        play-clicked => { root.track-play(2); root.playing-track = 2; }
+                        delete-clicked => {
+                            root.track-delete(2);
+                            root.track3-deleted = true;
+                            if (root.playing-track == 2) { root.playing-track = -1; }
+                        }
+                    }
+                }
+            }
+
+            NavBar { back => { root.active-screen = "home"; } home => { root.active-screen = "home"; } }
         }
     }
 }
